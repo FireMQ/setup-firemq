@@ -30,6 +30,9 @@ jobs:
           firemq ctl --url "${{ steps.firemq.outputs.http-url }}" declare-queue ci
           firemq pub --url "${{ steps.firemq.outputs.fire-url }}" --queue ci "hello from CI"
           test "$(firemq sub --url "${{ steps.firemq.outputs.fire-url }}" ci --count 1)" = "hello from CI"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: A RabbitMQ client connects
         shell: bash
         env:
