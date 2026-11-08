@@ -6,21 +6,28 @@ on:
     branches: [main]
 
 jobs:
-  # Until FireMQ v0.1.0 is released, the action builds FireMQ from source at a fixed commit.
-  # Once it is out, a second matrix entry tests "version: latest".
-  source:
+  # Installs the latest release, and builds a release tag from source, on every runner OS.
+  test:
+    name: ${{ matrix.os }}, ${{ matrix.install }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        install: [latest release, from source]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - id: firemq
         uses: ./
         with:
-          ref: b90a2ff9bda15a398c6957bfb291e4a9db9957ab
+          # An empty ref installs the release given by "version", which defaults to latest.
+          ref: ${{ matrix.install == 'from source' && 'v0.1.0' || '' }}
           http-port: "15680"
+      - name: The installed version
+        shell: bash
+        run: |
+          echo "version output: ${{ steps.firemq.outputs.version }}"
+          firemq --version
       - name: The broker answers
         shell: bash
         run: |
