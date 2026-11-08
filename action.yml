@@ -1,0 +1,76 @@
+name: Set up FireMQ
+description: Start a FireMQ broker, a RabbitMQ-compatible message broker, for the rest of the job.
+author: FireMQ
+branding:
+  icon: zap
+  color: orange
+
+inputs:
+  version:
+    description: FireMQ release to install, for example v0.1.0, or "latest".
+    default: latest
+  ref:
+    description: Build FireMQ from this git commit, branch or tag instead of installing a release. Needs Rust, which GitHub-hosted runners have.
+    default: ""
+  listen:
+    description: Address the listeners bind to. Use 0.0.0.0 to reach the broker from containers.
+    default: 127.0.0.1
+  amqp-port:
+    description: AMQP 0-9-1 port.
+    default: "5672"
+  fire-port:
+    description: FireMQ protocol port.
+    default: "5673"
+  http-port:
+    description: Port for the management UI and API, metrics and WebSocket.
+    default: "15672"
+  persistent:
+    description: Keep data on disk in the runner's temp folder instead of in memory.
+    default: "false"
+  args:
+    description: Extra flags for firemq, for example "--log debug".
+    default: ""
+
+outputs:
+  amqp-url:
+    description: AMQP URL, for RabbitMQ clients.
+    value: ${{ steps.start.outputs.amqp-url }}
+  fire-url:
+    description: FireMQ protocol URL, for FireMQ SDKs.
+    value: ${{ steps.start.outputs.fire-url }}
+  ws-url:
+    description: WebSocket URL, for browser clients.
+    value: ${{ steps.start.outputs.ws-url }}
+  http-url:
+    description: Management UI and API URL.
+    value: ${{ steps.start.outputs.http-url }}
+  version:
+    description: The installed FireMQ version.
+    value: ${{ steps.start.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Cache a source build
+      if: inputs.ref != ''
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/firemq-src-${{ inputs.ref }}
+        key: firemq-${{ runner.os }}-${{ runner.arch }}-${{ inputs.ref }}
+    - name: Install FireMQ
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        REF: ${{ inputs.ref }}
+      run: '"$GITHUB_ACTION_PATH/scripts/install.sh"'
+    - name: Start FireMQ
+      id: start
+      shell: bash
+      env:
+        LISTEN: ${{ inputs.listen }}
+        AMQP_PORT: ${{ inputs.amqp-port }}
+        FIRE_PORT: ${{ inputs.fire-port }}
+        HTTP_PORT: ${{ inputs.http-port }}
+        PERSISTENT: ${{ inputs.persistent }}
+        ARGS: ${{ inputs.args }}
+      run: '"$GITHUB_ACTION_PATH/scripts/start.sh"'

@@ -1,0 +1,52 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  # Until FireMQ v0.1.0 is released, the action builds FireMQ from source at a fixed commit.
+  # Once it is out, a second matrix entry tests "version: latest".
+  source:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: firemq
+        uses: ./
+        with:
+          ref: b90a2ff9bda15a398c6957bfb291e4a9db9957ab
+          http-port: "15680"
+      - name: The broker answers
+        shell: bash
+        run: |
+          echo "AMQP ${{ steps.firemq.outputs.amqp-url }}"
+          echo "FireMQ ${{ steps.firemq.outputs.fire-url }}"
+          curl -fsS "${{ steps.firemq.outputs.http-url }}/healthz"
+          firemq ctl --url "${{ steps.firemq.outputs.http-url }}" declare-queue ci
+          firemq pub --url "${{ steps.firemq.outputs.fire-url }}" --queue ci "hello from CI"
+          test "$(firemq sub --url "${{ steps.firemq.outputs.fire-url }}" ci --count 1)" = "hello from CI"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: A RabbitMQ client connects
+        shell: bash
+        env:
+          AMQP_URL: ${{ steps.firemq.outputs.amqp-url }}
+        run: |
+          python3 -m pip install --quiet pika
+          python3 - <<'PY'
+          import os, pika
+          conn = pika.BlockingConnection(pika.URLParameters(os.environ["AMQP_URL"]))
+          ch = conn.channel()
+          ch.queue_declare(queue="pika")
+          ch.basic_publish(exchange="", routing_key="pika", body=b"hi")
+          _, _, body = ch.basic_get(queue="pika", auto_ack=True)
+          assert body == b"hi", body
+          conn.close()
+          print("pika round trip OK")
+          PY
